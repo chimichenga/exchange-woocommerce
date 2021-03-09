@@ -1,4 +1,5 @@
 <?php
+
 /* Add custom order actions to meta box */
 add_action( 'woocommerce_order_actions', 'add_custom_order_for_preath', 10 ,1 );
 function add_custom_order_for_preath( $actions ) {
@@ -101,4 +102,52 @@ function hide_wc_refund_button() {
         return;
     }
 	?><script>jQuery(function () { jQuery('.refund-items').hide(); jQuery('.order_actions option[value=send_email_customer_refunded_order]').remove(); if (jQuery('#original_post_status').val()=='wc-refunded') {jQuery('#s2id_order_status').html('Refunded'); } else { jQuery('#order_status option[value=wc-refunded]').remove(); } }); </script><?php
+}
+
+// Recurring payments
+// Add custom order action for recurring payments
+add_action( 'woocommerce_order_actions', 'add_custom_order_for_recurring', 10 ,1 );
+function add_custom_order_for_recurring( $actions ) {
+	global $theorder;
+	/* Action will show only if status is 'scheduled' */
+	if ( $theorder->get_meta( 'AS_RecurringActive' ) !== 'yes' ) {
+		return $actions;
+	}
+	$actions['allsecure_cancel_recurring'] = __( 'AllSecure Cancel Recurring', 'allsecureexchange' );
+	return $actions;
+}
+
+// Add order actions to 'My Account' page
+add_filter( 'woocommerce_my_account_my_orders_actions', 'as_my_account_orders_actions', 50, 2 );
+function as_my_account_orders_actions( $actions, $order ) {
+	if ( $order->get_meta( 'AS_RecurringActive' ) == 'yes' ) {
+		$actions['allsecure_cancel_recurring'] = array(
+			'url'  => wp_nonce_url( admin_url( 'admin-ajax.php?action=allsecure_cancel_recurring&order='.$order->get_id() ), 'allsecure_cancel_recurring' ),
+			'name' => _x( 'Cancel', 'Cancel recurring payment', 'allsecureexchange' )
+		);
+	}
+	return $actions;
+}
+
+add_action('wp_ajax_allsecure_cancel_recurring', 'allsecure_cancel_recurring' );
+function allsecure_cancel_recurring(){
+	if( !check_admin_referer( 'allsecure_cancel_recurring' ) ){
+		echo 'You are not allowed on this page.';
+		exit;
+	}
+
+	global $woocommerce;
+	$order = wc_get_order( $_REQUEST['order'] );
+
+	$status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
+	if ( $status ) {
+		$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange') ));
+//		return true;
+	} else {
+		$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
+//		return false;
+	}
+
+	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
+	exit;
 }

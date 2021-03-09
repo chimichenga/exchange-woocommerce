@@ -43,6 +43,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		
 		add_action( 'woocommerce_order_action_allsecure_capture', array( $this, 'allsecure_exchange_capture_payment' ) );
 		add_action( 'woocommerce_order_action_allsecure_reverse', array( $this, 'allsecure_exchange_reverse_payment' ) );
+	    add_action( 'woocommerce_order_action_allsecure_cancel_recurring', array( $this, 'cancel_recurring' ) );
 		
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
         add_action('wp_enqueue_scripts', function () {
@@ -179,7 +180,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
         }
 		$merchantTransactionId = $this->encodeOrderId($orderId);
 		// keep track of last tx id 
-        $this->order->add_meta_data('merchantTransactionId', $merchantTransactionId, true); 
+        $this->order->add_meta_data('merchantTransactionId', $merchantTransactionId, true);
         $this->order->save_meta_data();
 		$transaction->setTransactionId($merchantTransactionId)
 			->setAmount(floatval($this->order->get_total()))
@@ -191,20 +192,35 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
             ->setSuccessUrl(add_query_arg(['astrxId' => $merchantTransactionId], $this->paymentSuccessUrl($this->order)))
 			->setErrorUrl  (add_query_arg(['astrxId' => $merchantTransactionId], wc_get_checkout_url($this->order)));
 
-        /**
-         * integration key is set -> seamless
-         * proceed to pay now page or apply submitted transaction token
-         */
-        if ($this->get_option('integrationKey')) {
-            $token = !empty($this->get_post_data()['token']) ? $this->get_post_data()['token'] : null;
-            if (!$token) {
-                return [
-                    'result' => 'success',
-                    'redirect' => $this->order->get_checkout_payment_url(false),
-                ];
-            }
-            $transaction->setTransactionToken($token);
-        }
+		// Server-to-server recurring transaction
+		$is_automatic_recurring = $this->order->get_meta('AS_RecurringDuplicate') == 'yes';
+		if( $is_automatic_recurring ){
+			$transaction->setReferenceTransactionId($this->order->get_meta('AS_ReferenceID'));
+			$transaction->setTransactionIndicator('RECURRING');
+			$this->order->add_order_note('Recurring Reference ID: '.$this->order->get_meta('AS_ReferenceID').'.');
+		}
+
+		// Register for initial recurring payments
+		if ( $this->is_recurring_donation( $orderId ) && !$is_automatic_recurring ) {
+			$transaction->setWithRegister( true );
+		}
+
+		/**
+		 * integration key is set -> seamless
+		 * proceed to pay now page or apply submitted transaction token
+		 *
+		 * skip for automatic recurring transactions
+		 */
+		if ( $this->get_option( 'integrationKey' ) && !$is_automatic_recurring ) {
+			$token = ! empty( $this->get_post_data()['token'] ) ? $this->get_post_data()['token'] : null;
+			if ( ! $token ) {
+				return [
+					'result'   => 'success',
+					'redirect' => $this->order->get_checkout_payment_url( false ),
+				];
+			}
+			$transaction->setTransactionToken( $token );
+		}
 
         /**
          * transaction
@@ -218,7 +234,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 $result = $client->debit($transaction);
                 break;
         }
-		
+
 		if ($result->getReturnType() == AllsecureExchange\Client\Transaction\Result::RETURN_TYPE_ERROR) {
 			$error = $result->getFirstError();
 			$errors = $error->getCode();
@@ -239,10 +255,10 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'result' => 'success',
 				'redirect' => add_query_arg(['astrxId' => $merchantTransactionId], $this->paymentSuccessUrl($this->order))
 			];
-		} else { 
+		} else {
 			// something went wrong
 			$errors = '000';
-			return $this->paymentFailedResponse($errors); 
+			return $this->paymentFailedResponse($errors);
 		}
 	}
 	/** 
@@ -286,7 +302,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		if ($result->getReturnType() == AllsecureExchange\Client\Transaction\Result::RETURN_TYPE_FINISHED) {
 			$gatewayReferenceId = $result->getReferenceId();
 			$order->add_order_note(sprintf(__('AllSecure Capture Processed Successful. The Capture ID is %s ', 'allsecureexchange'), $gatewayReferenceId ));
-			$order->update_status('wc-accepted'); 
+			$order->update_status('wc-accepted');
 			return true;
 		} elseif ($result->getReturnType() == AllsecureExchange\Client\Transaction\Result::RETURN_TYPE_ERROR) {
 			$error = $result->getFirstError();
@@ -339,7 +355,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		if ($result->getReturnType() == AllsecureExchange\Client\Transaction\Result::RETURN_TYPE_FINISHED) {
 			$gatewayReferenceId = $result->getReferenceId();
 			$order->add_order_note(sprintf(__('AllSecure Reversal Processed Successful. The Reversal ID is %s ', 'allsecureexchange'), $gatewayReferenceId ));
-			$order->update_status('wc-cancelled'); 
+			$order->update_status('wc-cancelled');
 			return true;
 		} elseif ($result->getReturnType() == AllsecureExchange\Client\Transaction\Result::RETURN_TYPE_ERROR) {
 			$error = $result->getFirstError();
@@ -365,12 +381,12 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
     private function paymentFailedResponse($errors)
     {
 		if ($errors == '000') {
-			$this->order->add_order_note(__('Error in communication', 'allsecureexchange')); 
+			$this->order->add_order_note(__('Error in communication', 'allsecureexchange'));
 			wc_add_notice( __('Error in communication', 'allsecureexchange'), 'error');
-		} else  {	
+		} else {
 			include_once( dirname( __FILE__ ) . '/allsecure-exchange-error-list.php' );
 			$error_translated = array_key_exists($errors, $errormsgtranslate) ? $errormsgtranslate[$errors] :  $errors->getMessage();
-			wc_add_notice( $error_translated, 'error'); 
+			wc_add_notice( $error_translated, 'error');
 		}
 		return [
 				'result' => 'error',
@@ -408,11 +424,22 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		if ($callbackResult->getResult() == \AllsecureExchange\Client\Callback\Result::RESULT_OK) {
             switch ($callbackResult->getTransactionType()) {
                 case \AllsecureExchange\Client\Callback\Result::TYPE_DEBIT:
-               		$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true); 
-					$this->order->save_meta_data();
+               		$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true);
+
+	                // Recurring payment data
+	                if ( $this->is_recurring_donation( $this->order->get_id() ) ){
+		                $reference_id = $callbackResult->getReferenceId();
+		                $interval = $this->get_recurring_interval($this->order->get_id());
+		                $this->order->add_meta_data('AS_ReferenceID', $reference_id, true);
+		                $this->order->add_meta_data('AS_RecurringInterval', $interval, true);
+		                $this->order->add_meta_data('AS_RecurringActive', 'yes', true);
+		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecure_woo'), $reference_id));
+	                }
+
+	                $this->order->save_meta_data();
 					$this->order->payment_complete();
 					if ( isset($callbackResult->getextraData()['authCode']) ) {
-						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] )); 
+						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
 					}
 					$this->order->update_status('wc-accepted');
                     break;
@@ -424,16 +451,28 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					$this->order->update_status('wc-reversed');
                     break;
                 case \AllsecureExchange\Client\Callback\Result::TYPE_PREAUTHORIZE:
-					$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true); 
+					$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true);
+
+	                // Recurring payment data
+	                if ( $this->is_recurring_donation( $this->order->get_id() ) ){
+		                $reference_id = $callbackResult->getReferenceId();
+		                $interval = $this->get_recurring_interval($this->order->get_id());
+		                $this->order->add_meta_data('AS_ReferenceID', $reference_id, true);
+		                $this->order->add_meta_data('AS_RecurringInterval', $interval, true);
+		                $this->order->add_meta_data('AS_RecurringActive', 'yes', true);
+		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecure_woo'), $reference_id));
+	                }
+
 					$this->order->save_meta_data();
 					$this->order->payment_complete();
 					if ( isset($callbackResult->getextraData()['authCode']) ) {
-						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] )); 
+						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
 					}
-                    $this->order->update_status('wc-preauth'); 
+                    $this->order->update_status('wc-preauth');
                     break;
             }
-        } elseif ($callbackResult->getResult() == \AllsecureExchange\Client\Callback\Result::RESULT_ERROR) {
+
+		} elseif ($callbackResult->getResult() == \AllsecureExchange\Client\Callback\Result::RESULT_ERROR) {
             switch ($callbackResult->getTransactionType()) {
                 case \AllsecureExchange\Client\Callback\Result::TYPE_DEBIT:
 				case \AllsecureExchange\Client\Callback\Result::TYPE_PREAUTHORIZE:
@@ -468,12 +507,12 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'label' => __('Description', 'allsecureexchange'),
                 'description' => __('This controls the description which the user sees during checkout', 'allsecureexchange'),
                 'default' => $this->method_title,
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
 			'apiCredentials' => [
-					'title'       => __('API Credentials', 'allsecureexchange' ),
-					'type'        => 'title',
+					'title' => __('API Credentials', 'allsecureexchange' ),
+					'type' => 'title',
 					'description' => __('Enter your Exchange API Credentials to process transactions via AllSecure. You can get your Exchange Credentials via <a href="mailto:support@allsecure.eu">AllSecure Support</a>', 'allsecureexchange' ),
 			],
 			
@@ -487,7 +526,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                     ALLSECURE_EXCHANGE_EXTENSION_TEST_URL => 'Test Host',
                     ALLSECURE_EXCHANGE_EXTENSION_URL => 'Live Host',
                 ],
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
 			'apiUser' => [
@@ -495,7 +534,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Please enter your Exchange API User. This is needed in order to take the payment', 'allsecureexchange'), 
                 'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
             'apiPassword' => [
@@ -503,7 +542,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Please enter your Exchange API Password. This is needed in order to take the payment', 'allsecureexchange'), 
                 'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
             'apiKey' => [
@@ -511,7 +550,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Please enter your Exchange API Key. This is needed in order to take the payment', 'allsecureexchange'), 
                 'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
             'sharedSecret' => [
@@ -519,7 +558,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Please enter your Exchange Shared Secret. This is needed in order to take the payment', 'allsecureexchange'), 
                 'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
             'integrationKey' => [
@@ -527,12 +566,12 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 'type' => 'text',
                 'description' => __('Public Integration Key required only if seamless integration required', 'allsecureexchange'),
                 'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
 			'paymentDetails' => [
-				'title'       => __('Payment Details', 'allsecureexchange' ),
-				'type'        => 'title',
+				'title' => __('Payment Details', 'allsecureexchange' ),
+				'type' => 'title',
 			],
 			
 			'transactionRequest' => [
@@ -544,7 +583,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                     'debit' => __('Debit', 'allsecureexchange'),
                     'preauthorize' => __('Preauthorize', 'allsecureexchange'),
                 ],
-				'desc_tip'    => true,
+				'desc_tip' => true,
             ],
 			
 			'card_supported' => [
@@ -555,7 +594,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					'MAESTRO'
 				],
 				'description' => __( 'Contact support at <a href="support@allsecure.eu">support@allsecure.eu</a> if you want to accept AMEX transactions', 'allsecureexchange' ),
-				'css'   => 'height: 100%;',
+				'css' => 'height: 100%;',
 				'type' => 'multiselect',
 				'options' => [
 					'VISA' => __('VISA', 'allsecureexchange'),
@@ -563,8 +602,8 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					'MAESTRO' => __('MAESTRO', 'allsecureexchange'),
 					'AMEX' => __('AMEX', 'allsecureexchange'),
 					'DINERS' => __('DINERS', 'allsecureexchange'),
-					'JCB'  => __('JCB', 'allsecureexchange'),
-					'DINA'  => __('DINA', 'allsecureexchange'),
+					'JCB' => __('JCB', 'allsecureexchange'),
+					'DINA' => __('DINA', 'allsecureexchange'),
 				],
 			],
 			
@@ -581,7 +620,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					'nlb-mne' => __('NLB Banka Montenegro', 'allsecureexchange'),
 					'ckb' => __('CKB Banka', 'allsecureexchange'),
 				],
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'banner_type' => [
@@ -594,12 +633,12 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					'light' => __('Light Background', 'allsecureexchange'),
 					'dark' => __('Dark Background', 'allsecureexchange'),
 				],
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'merchantDetails' => [
-				'title'       => __('Merchant Details', 'allsecureexchange' ),
-				'type'        => 'title',
+				'title' => __('Merchant Details', 'allsecureexchange' ),
+				'type' => 'title',
 			],
 			
 			'merchant_name' => [
@@ -607,7 +646,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'type' => 'text',
 				'description' => __('Please enter your Merchant Info to be displayed near the payment form', 'allsecureexchange' ),
 				'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'merchant_email' => [
@@ -615,7 +654,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'type' => 'text',
 				'description' => __( 'Please enter your Merchant Email', 'allsecureexchange' ),
 				'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'shop_url' => [
@@ -623,12 +662,12 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'type' => 'text',
 				'description' => __( 'Please enter your Shop URL', 'allsecureexchange' ),
 				'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'miscDetails' => [
-				'title'       => __('Other Details', 'allsecureexchange' ),
-				'type'        => 'title',
+				'title' => __('Other Details', 'allsecureexchange' ),
+				'type' => 'title',
 				'description' => __('Enter the following details to allow for plugin updates.', 'allsecureexchange' ),
 			],
 
@@ -637,7 +676,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'type' => 'text',
 				'description' => __( 'Please enter your ID as displayed on your invoice from AllSecure', 'allsecureexchange' ),
 				'default' => '',
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 			
 			'version_tracker' => [
@@ -646,7 +685,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 				'label' => __( 'Enable Version Tracker', 'allsecureexchange' ),
 				'description' => __( 'When enabled, you accept to share your IP, email address, etc with us', 'allsecureexchange' ),
 				'default' => 'yes',
-				'desc_tip'    => true,
+				'desc_tip' => true,
 			],
 
 		];
@@ -1541,7 +1580,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			$statusResult = $this->report_payment($order_id);
 			$errors = $statusResult->getFirstError();
 			include_once( dirname( __FILE__ ) . '/allsecure-exchange-error-list.php' );
-			$resp_code_translated = array_key_exists($errors->getCode(), $errormsgtranslate) ? $errormsgtranslate[$errors->getCode()] :  $errors->getMessage() ;
+			$resp_code_translated = array_key_exists($errors->getCode(), $errormsgtranslate) ? $errormsgtranslate[$errors->getCode()] : $errors->getMessage() ;
 			echo "<div class='woocommerce'><ul class='woocommerce-error' role='alert'>
 			<li>" . sprintf(__('Transaction Unsuccessful. The status message <b>%s</b>', 'allsecureexchange'), $resp_code_translated ) ." * </li>
 			</ul>
@@ -1574,20 +1613,22 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			echo "<div class='woocommerce-order'>
 			<h2>". __('Transaction details', 'allsecure_woo').": </h2>
 			<ul class='woocommerce-order-overview woocommerce-thankyou-order-details order_details'>
-				<li class='woocommerce-order-overview__email email'>" . __('Transaction Codes', 'allsecureexchange' );
+				<li class='woocommerce-order-overview__email email'>"
+					. __('Transaction Codes', 'allsecureexchange' );
 					if ( isset($extraData['authCode']) ) {
-						echo('<strong>'. $extraData['authCode'] .'</strong>');
+						echo(': <strong>'. $extraData['authCode'] .'</strong>');
 					}
-				echo "</li>
-					<li class='woocommerce-order-overview__email email'>". __('Card Type', 'allsecureexchange' ) .
-					"<strong>". $binBrand ." *** ".$lastFourDigits."</strong>
-					</li>
-					<li class='woocommerce-order-overview__email email'>" . __('Payment Type', 'allsecureexchange' ) .
-					"<strong>".$transactionType."</strong>
-					</li>
-					<li class='woocommerce-order-overview__email email'>".  __('Transaction Time', 'allsecureexchange' ) .
-					"<strong>".$timestamp."</strong>
-					</li>
+				echo "
+				</li>
+				<li class='woocommerce-order-overview__email email'>"
+					. __('Card Type', 'allsecureexchange' ) . ": <strong>". $binBrand ." *** ".$lastFourDigits."</strong>
+				</li>
+				<li class='woocommerce-order-overview__email email'>"
+					. __('Payment Type', 'allsecureexchange' ) . ": <strong>".$transactionType."</strong>
+				</li>
+				<li class='woocommerce-order-overview__email email'>"
+					. __('Transaction Time', 'allsecureexchange' ) . ": <strong>".$timestamp."</strong>
+				</li>
 				</ul>
 			</div>";
 		}
@@ -1646,4 +1687,54 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		$merchant['shop_url'] = $this->get_option('shop_url');
 		return $merchant;
 	}
+
+	public function cancel_recurring( $order_id ){
+		global $woocommerce;
+		$order = wc_get_order( $order_id );
+
+		$status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
+		if ( $status ) {
+			$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecure_woo') ));
+			return true;
+		} else {
+			$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecure_woo') ));
+			return false;
+		}
+	}
+
+	// Check if order is a monthly donation based on products
+	public function is_recurring_donation( $order_id ){
+		global $woocommerce;
+		$order = new WC_Order( $order_id );
+		$order_items = $order->get_items();
+
+		// Skip copied recurring orders
+		if( $order->get_meta('AS_RecurringDuplicate') == 'yes' )
+			return false;
+
+		// The order is recurring only if one recurring-type product is present
+		if( count($order_items) == 1 ){
+			$item = array_values($order_items)[0];
+			$product_id = $item->get_product_id();
+			$product = wc_get_product( $product_id );
+
+			if( $product && $product->is_type('donation') && ($product->get_meta( '_recurring_donation', true ) == 'yes') )
+				return true;
+			else
+				return false;
+		} else {
+			return false;
+		}
+	}
+
+	// Get time interval for recurring payments
+	public function get_recurring_interval( $order_id ){
+		global $woocommerce;
+		$order = new WC_Order( $order_id );
+		$order_items = $order->get_items();
+		$item = array_values($order_items)[0];
+		$product_id = $item->get_product_id();
+		return get_post_meta( $product_id, '_recurring_interval', true );
+	}
+
 }
