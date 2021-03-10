@@ -179,7 +179,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                 break;
         }
 		$merchantTransactionId = $this->encodeOrderId($orderId);
-		// keep track of last tx id 
+		// keep track of last tx id
         $this->order->add_meta_data('merchantTransactionId', $merchantTransactionId, true);
         $this->order->save_meta_data();
 		$transaction->setTransactionId($merchantTransactionId)
@@ -261,9 +261,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			return $this->paymentFailedResponse($errors);
 		}
 	}
-	/** 
+	/**
 	 * Capture the payment
-	 * and return the result 
+	 * and return the result
 	 *
      * @return string|null
 	 */
@@ -318,9 +318,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		}
 		return false;
 	}
-	/** 
+	/**
 	 * Void the payment
-	 * and return the result 
+	 * and return the result
 	 *
      * @return string|null
 	 */
@@ -530,39 +530,39 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
             ],
 			
 			'apiUser' => [
-                'title' => __('API User', 'allsecureexchange'), 
+                'title' => __('API User', 'allsecureexchange'),
                 'type' => 'text',
-                'description' => __('Please enter your Exchange API User. This is needed in order to take the payment', 'allsecureexchange'), 
+                'description' => __('Please enter your Exchange API User. This is needed in order to take the payment', 'allsecureexchange'),
                 'default' => '',
 				'desc_tip' => true,
             ],
 			
             'apiPassword' => [
-                'title' => 	__('API Password', 'allsecureexchange'), 
+                'title' => 	__('API Password', 'allsecureexchange'),
                 'type' => 'text',
-                'description' => __('Please enter your Exchange API Password. This is needed in order to take the payment', 'allsecureexchange'), 
+                'description' => __('Please enter your Exchange API Password. This is needed in order to take the payment', 'allsecureexchange'),
                 'default' => '',
 				'desc_tip' => true,
             ],
 			
             'apiKey' => [
-                'title' => __('API Key', 'allsecureexchange'), 
+                'title' => __('API Key', 'allsecureexchange'),
                 'type' => 'text',
-                'description' => __('Please enter your Exchange API Key. This is needed in order to take the payment', 'allsecureexchange'), 
+                'description' => __('Please enter your Exchange API Key. This is needed in order to take the payment', 'allsecureexchange'),
                 'default' => '',
 				'desc_tip' => true,
             ],
 			
             'sharedSecret' => [
-                'title' => __('Shared Secret', 'allsecureexchange'), 
+                'title' => __('Shared Secret', 'allsecureexchange'),
                 'type' => 'text',
-                'description' => __('Please enter your Exchange Shared Secret. This is needed in order to take the payment', 'allsecureexchange'), 
+                'description' => __('Please enter your Exchange Shared Secret. This is needed in order to take the payment', 'allsecureexchange'),
                 'default' => '',
 				'desc_tip' => true,
             ],
 			
             'integrationKey' => [
-                'title' => __('Integration Key', 'allsecureexchange'), 
+                'title' => __('Integration Key', 'allsecureexchange'),
                 'type' => 'text',
                 'description' => __('Public Integration Key required only if seamless integration required', 'allsecureexchange'),
                 'default' => '',
@@ -575,9 +575,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			],
 			
 			'transactionRequest' => [
-                'title' => __('Transaction Type', 'allsecureexchange'), 
+                'title' => __('Transaction Type', 'allsecureexchange'),
                 'type' => 'select',
-                'description' => __('Choose type of Payment you wish to use', 'allsecureexchange'), 
+                'description' => __('Choose type of Payment you wish to use', 'allsecureexchange'),
                 'default' => 'debit',
                 'options' => [
                     'debit' => __('Debit', 'allsecureexchange'),
@@ -691,18 +691,18 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		];
     }
 	
-	/** 
-	 * Custom Credit Card Icons on a checkout page 
+	/**
+	 * Custom Credit Card Icons on a checkout page
 	**/
 	public function get_icon() {
 		$icon_html = $this->allsecure_get_icon();
 		return apply_filters( 'woocommerce_gateway_icon', $icon_html, $this->id );
 	}
-		
+
 	function allsecure_get_icon() {
 		$selectedcards = $this->settings['card_supported'];
 		$icon_html = '';
-					
+
 		if ( isset( $selectedcards ) && '' !== $selectedcards ) {
 			foreach ( $selectedcards as $card ) {
 				$icons = plugins_url(). '/allsecureexchange/assets/images/light/' .strtolower( $card ) . '.svg';
@@ -712,7 +712,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		return $icon_html;
 	}
 	/**
-     * Adding AllSecure Payment Button on checkout page. 
+     * Adding AllSecure Payment Button on checkout page.
 	**/
     public function payment_fields()
     {
@@ -725,7 +725,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
         }
 		$selectedCards = $this->settings['card_supported'];
 		$allowedCards = implode(' ',$selectedCards);
-		
+
 		if ($this->get_option('apiHost') !== ALLSECURE_EXCHANGE_EXTENSION_URL) {
 			echo '<div id="allsecure_exchange_sandbox" >'.__('THIS IS THE TEST MODE', 'allsecureexchange').'</div>';
 		}
@@ -755,7 +755,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 					<span id="allsecure_exchange_seamless_card_number" style="padding: 0; width: 100%; display: flex;" ></span>
 				</span>
 			</div>
-			<div class="form-row form-row-first" style=" padding-left: 0px; padding-right: 0px;"> 
+			<div class="form-row form-row-first" style=" padding-left: 0px; padding-right: 0px;">
 				<label for="allsecure_exchange_seamless_expiry">'.
 				__('Expiration', 'allsecureexchange').'</label>
 				<span class="woocommerce-input-wrapper" style="width:100%; ">
@@ -1568,9 +1568,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
         return null;
     }
 	
-	/** 
-	 * Get status and show details 
-	 * on Declined Transactions 
+	/**
+	 * Get status and show details
+	 * on Declined Transactions
 	 *
      * @return string|null
 	 */
@@ -1587,9 +1587,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			</div>";
 		}
 	}
-	/** 
-	 * Get status and show details 
-	 * on Thankyou Page 
+	/**
+	 * Get status and show details
+	 * on Thankyou Page
 	 *
      * @return string|null
 	 */
@@ -1672,7 +1672,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		return $this->get_option('merchant_bank');
 	}
 	/**
-	 * Get general merchants info 
+	 * Get general merchants info
 	 * for version tracker
 	 ** @return array
 	 */
