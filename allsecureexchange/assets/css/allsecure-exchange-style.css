@@ -32,7 +32,6 @@
 	margin-top: 15px;
 }
 
-
 .allsecure_exchange_visible{
     display: block!important;
 	line-height: 130%;
@@ -43,104 +42,24 @@
 
 #allsecure_exchange_banner {
 	max-width: 1074px;
-	display: flex;
+	width: 100%;
 	margin: 10px auto;
-	padding-bottom: 20px
-}
 
-#allsecure_exchange_banner .allsecure {
-	width: 20%;
-	border-right: solid #ccc 2px
-}
-
-#allsecure_exchange_banner .allsecure_threeds {
-	width: 15%;
 	display: flex;
-	border-right: solid #ccc 2px
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
 }
-
-#allsecure_exchange_banner .allsecure_cards {
-	width: 45%;
-	display: flex;
-	border-right: solid #ccc 2px
+#allsecure_exchange_banner > * {
+	margin: 0 15px 15px 15px;
 }
-
-#allsecure_exchange_banner .allsecure_bank {
-	width: 20%
-}
-
-.allsecure img {
-	height: 30px!important;
-	display: block;
-	margin: auto
-}
-
-.allsecure_threeds img {
-	width: 40%;
-	height: 25px!important;
-	display: block;
-	margin: auto;
-	margin-top: 3px
-}
-
-.allsecure_cards img {
-	height: 30px!important;
-	display: block;
-	margin: auto
-}
-
-.allsecure_bank img {
-	height: 30px!important;
-	display: block;
-	margin: auto;
-	max-width: 80%
+#allsecure_exchange_banner img {
+	height: 36px;
+	width: auto;
 }
 
 @media (max-width:480px) {
-	#allsecure_exchange_banner {
-		flex-flow: row wrap;
-		display: flex
-	}
-	#allsecure_exchange_banner .allsecure {
-		order: 2;
-		width: 35%;
-		padding-left: 10px;
-		border: none
-	}
-	#allsecure_exchange_banner .allsecure_threeds {
-		order: 3;
-		width: 30%;
-		padding-left: 5px;
-		padding-right: 5px;
-		display: inline-flex;
-		border: none
-	}
-	#allsecure_exchange_banner .allsecure_cards {
-		order: 1;
-		width: 100%;
-		border: none;
-		padding: 0 5px 10px 5px
-	}
-	#allsecure_exchange_banner .allsecure_bank {
-		order: 4;
-		width: 35%;
-		display: block
-	}
-	.allsecure img {
-		width: unset;
-		height: 20px!important;
-		display: block
-	}
-	.allsecure_cards img {
-		height: 25px!important
-	}
-	.allsecure_threeds img {
-		width: 40%;
-		height: 20px!important
-	}
-	.allsecure_bank img {
-		width: unset;
-		height: 20px!important;
-		display: block
+	#allsecure_exchange_banner img {
+		height: 26px;
 	}
 }
