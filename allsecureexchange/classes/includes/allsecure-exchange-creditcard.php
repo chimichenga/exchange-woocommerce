@@ -433,7 +433,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		                $this->order->add_meta_data('AS_ReferenceID', $reference_id, true);
 		                $this->order->add_meta_data('AS_RecurringInterval', $interval, true);
 		                $this->order->add_meta_data('AS_RecurringActive', 'yes', true);
-		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecure_woo'), $reference_id));
+		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
 	                }
 
 	                $this->order->save_meta_data();
@@ -460,7 +460,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		                $this->order->add_meta_data('AS_ReferenceID', $reference_id, true);
 		                $this->order->add_meta_data('AS_RecurringInterval', $interval, true);
 		                $this->order->add_meta_data('AS_RecurringActive', 'yes', true);
-		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecure_woo'), $reference_id));
+		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
 	                }
 
 					$this->order->save_meta_data();
@@ -1611,7 +1611,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			$extraData = $statusResult -> getextraData();
 			$timestamp = date("Y-m-d H:i:s");
 			echo "<div class='woocommerce-order'>
-			<h2>". __('Transaction details', 'allsecure_woo').": </h2>
+			<h2>". __('Transaction details', 'allsecureexchange').": </h2>
 			<ul class='woocommerce-order-overview woocommerce-thankyou-order-details order_details'>
 				<li class='woocommerce-order-overview__email email'>"
 					. __('Transaction Codes', 'allsecureexchange' );
@@ -1694,10 +1694,10 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 
 		$status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
 		if ( $status ) {
-			$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecure_woo') ));
+			$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange') ));
 			return true;
 		} else {
-			$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecure_woo') ));
+			$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
 			return false;
 		}
 	}
