@@ -80,6 +80,9 @@ function get_allsecure_banner_html(){
 add_shortcode('allsecure_banner','allsecure_banner_shortcode');
 function allsecure_banner_shortcode( $atts ){
 	wp_enqueue_style( 'allsecure_style', plugins_url(). '/allsecureexchange/assets/css/allsecure-exchange-style.css', array(), null );
+
+	ob_start();
 	echo get_allsecure_banner_html();
+	return ob_get_clean();
 }
 
