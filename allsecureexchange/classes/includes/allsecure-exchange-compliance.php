@@ -59,21 +59,33 @@ function get_allsecure_banner_html(){
 	} else {
 		$bankUrl = '#';
 	}
-	$bank = '<a href="'.$bankUrl.'" target="_new" ><img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/'.$selectedBank.'.svg"></a>';
-	$vbv = '<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/visa_secure.svg">';
-	$mcsc = '<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/mc_idcheck.svg">';
+	$bank = '
+		<a href="'.$bankUrl.'" target="_new" >
+			<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/'.$selectedBank.'.svg">
+		</a>';
+	$vbv = '
+		<a href="https://rs.visa.com/pay-with-visa/security-and-assistance/protected-everywhere.html" target="_blank">
+			<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/visa_secure.svg">
+		</a>';
+	$mcsc = '
+		<a href="http://www.mastercard.com/rs/consumer/credit-cards.html" target="_blank">
+			<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/mc_idcheck.svg">
+		</a>';
+
 	$allsecure_cards = $visa.''.$mastercard.''.$maestro.''.$diners.''.$amex.''.$jcb.''.$dina ;
 
-	$banner_items = $allsecure.$vbv.$mcsc.$allsecure_cards;
-	if ($selectedBank !== 'none')
-		$banner_items .= $bank;
+	if ($selectedBank == 'none')  {
+		$banner_items = $allsecure.$vbv.$mcsc.$allsecure_cards;
+	} else if ($selectedBank == 'bib') {
+		$banner_items = $allsecure.$vbv.$mcsc.$bank.$allsecure_cards;
+	} else {
+		$banner_items = $allsecure.$vbv.$mcsc.$bank.$allsecure_cards;
+	}
 
-	$allsecure_banner = '
+	return '
 		<div id="allsecure_exchange_banner">
-			'.$banner_items.'
+			' . $banner_items . '
 		</div>';
-
-	return $allsecure_banner;
 }
 
 // Registering banner shortcode
