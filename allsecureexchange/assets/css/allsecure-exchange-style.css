@@ -63,3 +63,8 @@
 		height: 26px;
 	}
 }
+
+/* Checkout */
+.payment_method_allsecure_exchange_creditcard label > img {
+	height: 32px;
+}

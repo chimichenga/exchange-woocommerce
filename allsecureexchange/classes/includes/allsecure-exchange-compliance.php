@@ -24,25 +24,25 @@ function get_allsecure_banner_html(){
 	$image_url_prefix = plugins_url() . '/allsecureexchange/assets/images/' . $selectedBanner;
 
 	if (strpos($selectedCards, 'VISA') !== false) {
-		$visa = '<img src="' . $image_url_prefix . '/visa.svg">';
+		$visa = '<img class="visa-card" src="' . $image_url_prefix . '/visa.svg">';
 	}
 	if (strpos($selectedCards, 'MASTERCARD') !== false) {
-		$mastercard = '<img src="' . $image_url_prefix . '/mastercard.svg">';
+		$mastercard = '<img class="mastercard-card" src="' . $image_url_prefix . '/mastercard.svg">';
 	}
 	if (strpos($selectedCards, 'MAESTRO') !== false) {
-		$maestro = '<img src="' . $image_url_prefix . '/maestro.svg">';
+		$maestro = '<img class="maestro-card" src="' . $image_url_prefix . '/maestro.svg">';
 	}
 	if (strpos($selectedCards, 'AMEX') !== false) {
-		$amex = '<img src="' . $image_url_prefix . '/amex.svg">';
+		$amex = '<img class="amex-card" src="' . $image_url_prefix . '/amex.svg">';
 	}
 	if (strpos($selectedCards, 'DINERS') !== false) {
-		$diners = '<img src="' . $image_url_prefix . '/diners.svg">';
+		$diners = '<img class="diners-card" src="' . $image_url_prefix . '/diners.svg">';
 	}
 	if (strpos($selectedCards, 'JCB') !== false) {
-		$jcb = '<img src="' . $image_url_prefix . '/jcb.svg">';
+		$jcb = '<img class="jcb-card" src="' . $image_url_prefix . '/jcb.svg">';
 	}
 	if (strpos($selectedCards, 'DINA') !== false) {
-		$dina = '<img src="' . $image_url_prefix . '/dina.svg">';
+		$dina = '<img class="dina-card" src="' . $image_url_prefix . '/dina.svg">';
 	}
 
 	$allsecure = '<a href="https://www.allsecure.rs" target="_new"><img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/allsecure.svg"></a>';
@@ -60,7 +60,7 @@ function get_allsecure_banner_html(){
 		$bankUrl = '#';
 	}
 	$bank = '
-		<a href="'.$bankUrl.'" target="_new" >
+		<a href="'.$bankUrl.'" class="bank-logo" target="_new" >
 			<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/'.$selectedBank.'.svg">
 		</a>';
 	$vbv = '
