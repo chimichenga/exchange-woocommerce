@@ -51,9 +51,11 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
             wp_register_script('allsecure_exchange_js_' . $this->id, plugins_url('/allsecureexchange/assets/js/allsecure-exchange.js'), [], ALLSECURE_EXCHANGE_EXTENSION_VERSION, false);
         }, 999);
         add_action('woocommerce_api_wc_' . $this->id, [$this, 'process_callback']);
+
 		/* add_action to parse values when success */
-		add_action( 'woocommerce_thankyou', array( $this,'parse_value_allsecureexchange_success') );
-		/* add_action to parse values when error */
+//		add_action( 'woocommerce_thankyou', array( $this,'parse_value_allsecureexchange_success') );
+
+	    /* add_action to parse values when error */
 		add_action( 'woocommerce_before_checkout_form', array( $this,'parse_value_allsecureexchange_error'), 10 );
         add_filter('script_loader_tag', function ($tag, $handle) {
             if ($handle !== 'payment_js') {
@@ -116,6 +118,15 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
         $this->order = new WC_Order($orderId);
         $this->order->update_status('pending', __('Awaiting payment', 'woocommerce'));
         $this->user = $this->order->get_user();
+
+        /**
+         * Currency conversion
+	    */
+	    if( 'RSD' != get_woocommerce_currency() ) {
+	    	$rsd_total = get_rsd_value(floatval($this->order->get_total()), get_woocommerce_currency());
+		    $this->order->set_currency( 'RSD' );
+		    $this->order->set_total($rsd_total);
+	    }
 
         /**
          * gateway client
@@ -181,6 +192,11 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		$merchantTransactionId = $this->encodeOrderId($orderId);
 		// keep track of last tx id
         $this->order->add_meta_data('merchantTransactionId', $merchantTransactionId, true);
+
+	    if( 'RSD' != get_woocommerce_currency() ) {
+		    $this->order->add_meta_data('Converted_Total_RSD', $this->order->get_total(), true);
+	    }
+
         $this->order->save_meta_data();
 		$transaction->setTransactionId($merchantTransactionId)
 			->setAmount(floatval($this->order->get_total()))
@@ -277,6 +293,16 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		$amount 	= $order->get_total();
 		$currency 	= get_woocommerce_currency();
 		$merchantTransactionId = 'capture-'. $this->encodeOrderId($order->get_id());
+
+		/**
+		 * Currency conversion
+		 */
+		if( 'RSD' != get_woocommerce_currency() ) {
+			$rsd_total = get_rsd_value(floatval($this->order->get_total()), get_woocommerce_currency());
+			$this->order->set_currency( 'RSD' );
+			$this->order->set_total($rsd_total);
+		}
+
 		/**
          * gateway client
          */
@@ -384,7 +410,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 			$this->order->add_order_note(__('Error in communication', 'allsecureexchange'));
 			wc_add_notice( __('Error in communication', 'allsecureexchange'), 'error');
 		} else {
-			include_once( dirname( __FILE__ ) . '/allsecure-exchange-error-list.php' );
+			include( dirname( __FILE__ ) . '/allsecure-exchange-error-list.php' );
 			$error_translated = array_key_exists($errors, $errormsgtranslate) ? $errormsgtranslate[$errors] :  $errors->getMessage();
 			wc_add_notice( $error_translated, 'error');
 		}
@@ -425,6 +451,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
             switch ($callbackResult->getTransactionType()) {
                 case \AllsecureExchange\Client\Callback\Result::TYPE_DEBIT:
                		$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true);
+	                $this->order->add_meta_data('AS_TransactionStatus', $callbackResult->getResult(), true);
 
 	                // Recurring payment data
 	                if ( $this->is_recurring_donation( $this->order->get_id() ) ){
@@ -436,12 +463,14 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
 	                }
 
+	                if ( isset($callbackResult->getExtraData()['authCode']) ) {
+		                $this->order->add_meta_data('AS_AuthCode', $callbackResult->getextraData()['authCode'], true);
+		                $this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
+	                }
 	                $this->order->save_meta_data();
-					$this->order->payment_complete();
-					if ( isset($callbackResult->getextraData()['authCode']) ) {
-						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
-					}
-					$this->order->update_status('wc-accepted');
+	                $this->order->payment_complete();
+
+	                $this->order->update_status('wc-accepted');
                     break;
 				case \AllsecureExchange\Client\Callback\Result::TYPE_CAPTURE:
 					$this->order->update_status('wc-accepted');
@@ -452,6 +481,7 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
                     break;
                 case \AllsecureExchange\Client\Callback\Result::TYPE_PREAUTHORIZE:
 					$this->order->add_meta_data('ExchangeUuid', $callbackResult->getReferenceId(), true);
+	                $this->order->add_meta_data('AS_TransactionStatus', $callbackResult->getResult(), true);
 
 	                // Recurring payment data
 	                if ( $this->is_recurring_donation( $this->order->get_id() ) ){
@@ -463,12 +493,15 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		                $this->order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
 	                }
 
-					$this->order->save_meta_data();
-					$this->order->payment_complete();
-					if ( isset($callbackResult->getextraData()['authCode']) ) {
-						$this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
-					}
-                    $this->order->update_status('wc-preauth');
+	                if ( isset($callbackResult->getExtraData()['authCode']) ) {
+						$this->order->add_meta_data('AS_AuthCode', $callbackResult->getExtraData()['authCode'], true);
+		                $this->order->add_order_note(sprintf('Auth code: %s', $callbackResult->getextraData()['authCode'] ));
+	                }
+
+	                $this->order->save_meta_data();
+	                $this->order->payment_complete();
+
+	                $this->order->update_status('wc-preauth');
                     break;
             }
 
