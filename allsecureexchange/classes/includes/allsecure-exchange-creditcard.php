@@ -124,6 +124,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 	    */
 	    if( 'RSD' != get_woocommerce_currency() ) {
 	    	$rsd_total = get_rsd_value(floatval($this->order->get_total()), get_woocommerce_currency());
+		    if( $rsd_total == null )
+			    return false;
+
 		    $this->order->set_currency( 'RSD' );
 		    $this->order->set_total($rsd_total);
 	    }
@@ -299,6 +302,9 @@ class WC_AllsecureExchange_CreditCard extends WC_Payment_Gateway
 		 */
 		if( 'RSD' != get_woocommerce_currency() ) {
 			$rsd_total = get_rsd_value(floatval($this->order->get_total()), get_woocommerce_currency());
+			if( $rsd_total == null )
+				return false;
+
 			$this->order->set_currency( 'RSD' );
 			$this->order->set_total($rsd_total);
 		}

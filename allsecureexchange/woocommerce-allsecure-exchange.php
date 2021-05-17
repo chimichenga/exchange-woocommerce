@@ -34,6 +34,7 @@ add_action('plugins_loaded', function () {
     require_once ALLSECURE_EXCHANGE_EXTENSION_BASEDIR . 'classes/includes/allsecure-exchange-creditcard-mastercard.php';
     require_once ALLSECURE_EXCHANGE_EXTENSION_BASEDIR . 'classes/includes/allsecure-exchange-creditcard-unionpay.php';
     require_once ALLSECURE_EXCHANGE_EXTENSION_BASEDIR . 'classes/includes/allsecure-exchange-creditcard-visa.php';
+	require_once ALLSECURE_EXCHANGE_EXTENSION_BASEDIR . 'currency-conversion.php';
 
     add_filter('woocommerce_payment_gateways', function ($methods) {
         foreach (WC_AllsecureExchange_Provider::paymentMethods() as $paymentMethod) {
@@ -66,49 +67,6 @@ add_action('plugins_loaded', function () {
 		load_plugin_textdomain( 'allsecureexchange', FALSE, dirname(plugin_basename(__FILE__))."/languages");
 	}
 });
-
-
-/**
- * Currency conversion adaptation
- */
-
-// Render converted total value
-function converted_totals_notice(){
-	$currency = get_woocommerce_currency();
-	if( 'RSD' != $currency ){
-		$cart_total = WC()->cart->get_cart_contents_total();
-		$rsd_total = get_rsd_value($cart_total, $currency);
-
-		echo '<p>'.__('NOTICE, all payments will be converted to RSD (Serbian Dinar) currency before payment. Coversion rates may apply.', 'allsecureexchange').'</p>';
-		echo '<p>'.__('Total converted price in RSD is (approx.): ', 'allsecureexchange').'<b>'.wc_price($rsd_total, array( 'currency'=>'RSD' )).'</b></p>';
-	}
-}
-add_action('woocommerce_review_order_before_payment', 'converted_totals_notice');
-
-function get_rsd_value($amount, $currency){
-	// TODO get real exchange rates
-	$exchange_rates = array(
-		'EUR'=> 117.21,
-		'USD'=> 108.00,
-		'GBP'=> 128.13,
-	);
-
-	return $amount * $exchange_rates[$currency];
-}
-
-// Order details pages and email template
-add_action( 'woocommerce_order_details_after_order_table', 'order_conversion_meta', 20 );
-add_action( 'woocommerce_email_after_order_table', 'order_conversion_meta', 10, 4 );
-function order_conversion_meta( $order ){
-	$order = wc_get_order($order);
-	$converted_total = $order->get_meta('Converted_Total_RSD');
-	if( $converted_total )
-		echo '<p class="converted-val"><b>'.__('Converted total (approx.): ', 'allsecureexchange').'</b>'.wc_price($converted_total, array( 'currency'=>'RSD' ), '%2$s&nbsp;%1$s').'</p>';
-}
-
-/**
- * END Currency conversion adaptation
- */
 
 // Transaction details
 add_action( 'woocommerce_order_details_after_order_table', 'order_transaction_meta', 30);
