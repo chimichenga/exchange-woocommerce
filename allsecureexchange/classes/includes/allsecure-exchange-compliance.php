@@ -20,7 +20,7 @@ function get_allsecure_banner_html(){
 	if( $selectedBanner == 'none')
 		$selectedBanner = 'light';
 
-	$visa = $mastercard = $maestro = $amex = $diners = $jcb = $dina = '';
+	$visa = $mastercard = $maestro = $amex = $diners = $jcb = $dinacard = '';
 	$image_url_prefix = plugins_url() . '/allsecureexchange/assets/images/' . $selectedBanner;
 
 	if (strpos($selectedCards, 'VISA') !== false) {
@@ -41,8 +41,8 @@ function get_allsecure_banner_html(){
 	if (strpos($selectedCards, 'JCB') !== false) {
 		$jcb = '<img class="jcb-card" src="' . $image_url_prefix . '/jcb.svg">';
 	}
-	if (strpos($selectedCards, 'DINA') !== false) {
-		$dina = '<img class="dina-card" src="' . $image_url_prefix . '/dina.svg">';
+	if (strpos($selectedCards, 'DINACARD') !== false) {
+		$dinacard = '<img class="dina-card" src="' . $image_url_prefix . '/dinacard.svg">';
 	}
 
 	$allsecure = '<a href="https://www.allsecure.rs" target="_new"><img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/allsecure.svg"></a>';
@@ -72,7 +72,7 @@ function get_allsecure_banner_html(){
 			<img src="' . plugins_url(). '/allsecureexchange/assets/images/'.$selectedBanner.'/mc_idcheck.svg">
 		</a>';
 
-	$allsecure_cards = $visa.''.$mastercard.''.$maestro.''.$diners.''.$amex.''.$jcb.''.$dina ;
+	$allsecure_cards = $visa.''.$mastercard.''.$maestro.''.$diners.''.$amex.''.$jcb.''.$dinacard;
 
 	if ($selectedBank == 'none')  {
 		$banner_items = $allsecure.$vbv.$mcsc.$allsecure_cards;
