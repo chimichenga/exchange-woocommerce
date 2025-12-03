@@ -4,11 +4,11 @@
 - Contributors: AllSecure Exchange
 - Tags: Credit Card, e-commerce, payment, checkout
 - Requires at least: 4.0
-- Tested up to: 6.6
+- Tested up to: 6.8.3
 - Requires PHP: 5.5
-- Stable tag: 2.0.5
+- Stable tag: 2.0.6
 - WC requires at least: 2.4
-- WC tested up to: 8.8.5
+- WC tested up to: 10.3.5
 
 Accept payments in your WooCommerce store using AllSecure **EXCHANGE** Platform. See a fully functional WooCommerce <a href="http://demo.allsecure.xyz/cart/exchange/woo" target="_new">demo store</a> with AllSecure **EXCHANGE** as a payment gateway.
 
@@ -28,11 +28,3 @@ Accept payments in your WooCommerce store using AllSecure **EXCHANGE** Platform.
 4. Enable configured `AllSecure Exchange` payment methods.
 
 The active payment methods will be provided to your customers during checkout.
-
-== Changelog ==
-
-= 2.0.6 =
-* Oct 20, 2025
-* Fixed plugin settings page broken for the latest(Woo 10+) versions
-* Plugin tested on WooCommerce 10.3.3
-* Plugin tested on WordPress 6.8.3
