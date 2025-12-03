@@ -2,11 +2,11 @@
 /*
 Plugin Name: AllSecure Exchange
 Description: AllSecure Exchange for WooCommerce
-Version: 2.0.5
+Version: 2.0.6
 Requires at least: 4.0
-Tested up to: 6.5.4
+Tested up to: 6.9
 WC requires at least: 2.4
-WC tested up to: 8.9.3
+WC tested up to: 10.3.5
 Requires PHP: 5.5
 Author: <a href="https://www.allsecure.eu/">AllSecure</a>   
 Author URI: https://www.allsecure.eu/
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-define('ALLSECUREEXCHANGE_VERSION', '2.0.5');
+define('ALLSECUREEXCHANGE_VERSION', '2.0.6');
 define('ALLSECUREEXCHANGE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ALLSECUREEXCHANGE_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -575,7 +575,11 @@ function woocommerce_allsecureexchange_init() {
                     var fieldHTML = '<table class="dynamic-field-table" style="border-bottom: 1px solid #ccc; margin-bottom: 10px"><tr valign="top"><th scope="row" class="titledesc"><label><?php echo __('BIN', $this->domain)?></label></th><td class="forminp"><input type="number" name="woocommerce_allsecureexchange_installment_bins[]" value=""/></td><td><a href="javascript:void(0);" class="btn button-secondary remove_button" title="Remove field"><?php echo __('Remove', $this->domain)?></a></td></tr><tr valign="top"><th scope="row" class="titledesc"><label><?php echo __('Allowed Installments', $this->domain)?></label></th><td class="forminp"><input type="text" name="woocommerce_allsecureexchange_allowed_installments[]" value=""/><p><?php echo __('Enter comma separated eg: 3,6,9,12', $this->domain)?></p></td></tr></table>';
                     var x = parseInt('<?php echo (count($this->installment_bins) == 0) ? 1 : count($this->installment_bins)?>');
 
-                    jQuery('.wc-admin-breadcrumb').parent().after(jQuery('#allsecure-tabs'));
+					if (jQuery('.wc-admin-breadcrumb').length > 0) {
+						jQuery('.wc-admin-breadcrumb').parent().after(jQuery('#allsecure-tabs'));
+					} else if (jQuery('.wc-admin-header').length > 0) {
+						jQuery('.wc-admin-header').after(jQuery('#allsecure-tabs'));
+					}
                     jQuery('#allsecure-tabs').after(jQuery('#allsecure-tab-content-installment-settings'));
                     jQuery('#allsecure-tabs').show();
                     if (allsecuretab == 'settings') {

@@ -1,5 +1,11 @@
 # Release Notes
 
+## v2.0.6 (2025-12-01)
+### Fixed
+- Supports latest WordPress Version (6.8.3 and 6.9 RC3)
+- Supports latest WooCommerce Version 10.3.5
+- Supports latest PHP version (8.4)
+
 ## v2.0.5 (2024-07-24)
 ### Fixed
 - Upgraded version to support most recent WooCommerce functionalities (HPOS)

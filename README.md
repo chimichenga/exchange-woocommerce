@@ -28,3 +28,11 @@ Accept payments in your WooCommerce store using AllSecure **EXCHANGE** Platform.
 4. Enable configured `AllSecure Exchange` payment methods.
 
 The active payment methods will be provided to your customers during checkout.
+
+== Changelog ==
+
+= 2.0.6 =
+* Oct 20, 2025
+* Fixed plugin settings page broken for the latest(Woo 10+) versions
+* Plugin tested on WooCommerce 10.3.3
+* Plugin tested on WordPress 6.8.3
