@@ -2456,3 +2456,74 @@ function allsecure_cancel_recurring(){
 	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
 	exit;
 }
+
+/**
+ * Render a conditional checkbox after payment options (classic shortcode checkout).
+ * For agreeing to save card details.
+ */
+add_action( 'woocommerce_review_order_before_submit', function () {
+	if ( ! cart_has_recurring_donation() ) {
+		return;
+	}
+
+    woocommerce_form_field('save_card_details', array(
+        'type' => 'checkbox',
+        'class' => array('form-row', 'validate-required', 'card-details-confirmation'),
+        'label' => __('I agree to have my card details saved for future automatic payments.', 'allsecureexchange'),
+        'required' => true,
+    ), WC()->checkout->get_value('save_card_details'));
+} );
+
+/**
+ * Validate 'save card details' field on checkout submit
+ */
+add_action( 'woocommerce_checkout_process', function () {
+	if ( ! cart_has_recurring_donation() ) {
+		return;
+	}
+	if ( empty( $_POST['save_card_details'] ) ) {
+		wc_add_notice( __( 'Please agree to save your card details.', 'allsecureexchange' ), 'error' );
+	}
+} );
+
+/**
+ * Save 'save card details' confirmation into an order meta data field
+ */
+add_action( 'woocommerce_checkout_create_order', function ( $order, $data ) {
+	if ( ! cart_has_recurring_donation() ) {
+		return;
+	}
+
+	$value = ! empty( $_POST['save_card_details'] ) ? 'yes' : 'no';
+	$order->update_meta_data( 'AS_Agreed_Saving_Card_Details', $value );
+}, 10, 2 );
+
+/**
+ * Check if the cart contains only a recurring donation product
+ *
+ * @return bool
+ */
+function cart_has_recurring_donation() : bool {
+	if ( ! WC()->cart ) {
+        return false;
+	}
+
+	$cart_items = WC()->cart->get_cart();
+
+	if ( count($cart_items) != 1 ) {
+        return false;
+	}
+
+	foreach ( $cart_items as $item ) {
+		$product_id = $item['product_id'];
+		$product = wc_get_product( $product_id );
+
+		if ( $product && $product->is_type('donation') && get_post_meta( $product_id, '_recurring_donation', true ) === 'yes' ) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+    return false;
+}
