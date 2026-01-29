@@ -682,7 +682,7 @@ abstract class AllsecureExchange_Additional_Payment_Method_Abstract extends WC_P
                                 $binBrand = strtoupper($cardData->getType());
                             }
                             if (method_exists($cardData, 'getlastFourDigits')) {
-                                $lastFourDigits = $cardData->getlastFourDigits();
+                                $lastFourDigits = $cardData->getLastFourDigits();
                             }
                             
                             $bankName = '';

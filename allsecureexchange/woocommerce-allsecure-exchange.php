@@ -34,6 +34,7 @@ use Exchange\Client\StatusApi\StatusRequestData;
 use Exchange\Client\Transaction\Capture as AllsecureCapture;
 use Exchange\Client\Transaction\Refund as AllsecureRefund;
 use Exchange\Client\Transaction\VoidTransaction as AllsecureVoidTransaction;
+use Exchange\Client\Transaction\Deregister as AllsecureDeregister;
 
 /**
 * Add custom order status
@@ -807,14 +808,19 @@ function woocommerce_allsecureexchange_init() {
                             $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                             $comment = $comment1.$comment2;
 
-                            $this->log('TEST Debited');
-
 							// Recurring payment data
 							if ( $this->is_recurring_donation( $order_id ) ){
-								$this->log('TEST Is recurring, saving');
+								// Save informative card details
+								$card_data = $result->getReturnData();
 
+								$order->add_meta_data('AS_CardType', $card_data->getType(), true);
+								$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
+								$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
+
+								// Save recurring info
 								$reference_id = $result->getReferenceId();
 								$interval = $this->get_recurring_interval($order_id);
+
 								$order->add_meta_data('AS_ReferenceID', $reference_id, true);
 								$order->add_meta_data('AS_RecurringInterval', $interval, true);
 								$order->add_meta_data('AS_RecurringActive', 'yes', true);
@@ -882,6 +888,60 @@ function woocommerce_allsecureexchange_init() {
                 );
             }
         }
+
+		public function process_deregister($order_id) {
+			$order = $this->getOrder($order_id);
+
+			try {
+                $result = $this->deregisterTransaction($order);
+
+				// Handle the result
+				if ($result->isSuccess()) {
+					// handle result based on it's returnType
+					if ($result->getReturnType() == AllsecureResult::RETURN_TYPE_ERROR) {
+						// Error handling
+						$error = $result->getFirstError();
+						$errorCode = $error->getCode();
+						if (empty($errorCode)) {
+							$errorCode = $error->getAdapterCode();
+						}
+						$errorMessage = $this->getErrorMessageByCode($errorCode);
+						throw new \Exception($errorMessage);
+					} elseif ($result->getReturnType() == AllsecureResult::RETURN_TYPE_FINISHED) {
+						// Deregistration successful
+						$order->add_order_note(__('AllSecure Deregistration Successful.', 'allsecureexchange'));
+						$order->delete_meta_data('AS_CardType' );
+						$order->delete_meta_data('AS_CardBinDigits' );
+						$order->delete_meta_data('AS_CardLastFourDigits' );
+                        $order->save();
+
+                        return [
+                            'result' => 'success',
+                            'redirect' => wc_get_account_endpoint_url( 'monthly-donations' )
+                        ];
+					}
+				} else {
+					// handle error
+					$error = $result->getFirstError();
+					$errorCode = $error->getCode();
+					if (empty($errorCode)) {
+						$errorCode = $error->getAdapterCode();
+					}
+					$errorMessage = $this->getErrorMessageByCode($errorCode);
+					throw new \Exception($errorMessage);
+				}
+			} catch (\Exception $e) {
+				$errorMessage = $e->getMessage();
+				$this->log('Deregistration Catch: '.$errorMessage);
+				$message = __('Deregistration failed. ', $this->domain).' '.$errorMessage;
+
+				wc_add_notice($message, $notice_type = 'error');
+				return array(
+					'result' => 'failure',
+					'redirect' => wc_get_account_endpoint_url( 'monthly-donations' )
+				);
+			}
+		}
         
         /**
          * Payment Gateway Handler
@@ -1064,14 +1124,19 @@ function woocommerce_allsecureexchange_init() {
                                 $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                                 $comment = $comment1.$comment2;
 
-								$this->log('TEST Webhook - Debited');
-
 								// Recurring payment data
 								if ( $this->is_recurring_donation( $order_id ) ){
-									$this->log('TEST Webhook - Is recurring, saving');
+                                    // Save informative card details
+                                    $card_data = $callbackResult->getReturnData();
 
+									$order->add_meta_data('AS_CardType', $card_data->getType(), true);
+									$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
+									$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
+
+									// Save recurring info
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
+
 									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
 									$order->add_meta_data('AS_RecurringInterval', $interval, true);
 									$order->add_meta_data('AS_RecurringActive', 'yes', true);
@@ -1091,14 +1156,19 @@ function woocommerce_allsecureexchange_init() {
                                 $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                                 $comment = $comment1.$comment2;
 
-								$this->log('TEST Webhook - Capture');
-
 								// Recurring payment data
 								if ( $this->is_recurring_donation( $order_id ) ){
-									$this->log('TEST Webhook - Is recurring, saving');
+									// Save informative card details
+									$card_data = $callbackResult->getReturnData();
 
+									$order->add_meta_data('AS_CardType', $card_data->getType(), true);
+									$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
+									$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
+
+                                    // Save recurring info
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
+
 									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
 									$order->add_meta_data('AS_RecurringInterval', $interval, true);
 									$order->add_meta_data('AS_RecurringActive', 'yes', true);
@@ -1138,12 +1208,8 @@ function woocommerce_allsecureexchange_init() {
                                 $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                                 $comment = $comment1.$comment2;
 
-								$this->log('TEST Webhook - Preauthorized');
-
 								// Recurring payment data
 								if ( $this->is_recurring_donation( $order_id ) ){
-									$this->log('TEST Webhook - Is recurring, saving');
-
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
 									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
@@ -1902,7 +1968,7 @@ function woocommerce_allsecureexchange_init() {
                     wp_register_script('allsecure_paymentjs', $payment_js, [], ALLSECUREEXCHANGE_VERSION, false);
                     wp_register_script('allsecure_exchange_js', ALLSECUREEXCHANGE_PLUGIN_URL.'/assets/js/allsecure-exchange.js', [], ALLSECUREEXCHANGE_VERSION, false);
                 }
-            }  
+            }
         }
         
         /**
@@ -1998,7 +2064,6 @@ function woocommerce_allsecureexchange_init() {
         *
         * @return AllsecureClient
         */
-
        public function getClient()
        {
            $testMode = false;
@@ -2312,20 +2377,21 @@ function woocommerce_allsecureexchange_init() {
          * Cancel a recurring order.
          *
 		 * @param $order_id
-		 * @return bool
+		 * @return array
 		 */
 		public function cancel_recurring( $order_id ){
-			global $woocommerce;
 			$order = wc_get_order( $order_id );
 
-			$status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
-			if ( $status ) {
-				$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange') ));
-				return true;
+            $deregistration_status = $this->process_deregister( $order_id );
+            $status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
+
+			if ( $deregistration_status['result'] === 'success' && $status) {
+                $order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange')));
 			} else {
 				$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
-				return false;
 			}
+
+            return $deregistration_status;
 		}
 
 		/**
@@ -2373,6 +2439,31 @@ function woocommerce_allsecureexchange_init() {
 			$product_id = $item->get_product_id();
 			return get_post_meta( $product_id, '_recurring_interval', true );
 		}
+
+		/**
+         * Deregister transaction
+         *
+		 * @param $order
+		 * @return AllsecureResult
+		 */
+		public function deregisterTransaction( $order ){
+			$client = $this->getClient();
+            $transaction = new AllsecureDeregister();
+
+			$merchantTransactionId = $this->encodeOrderId($order->get_id()).'-deregister';
+            $reference_id = $order->get_meta('AS_ReferenceID');
+
+            $transaction->setMerchantTransactionId($merchantTransactionId)
+                ->setReferenceUuid($reference_id);
+
+            // $order->add_order_note('Recurring Reference ID: '.$order->get_meta('AS_ReferenceID').'.');
+
+            $this->log('Deregistering Transaction. Reference ID: '.$reference_id);
+            $this->log((array)($transaction));
+            $result = $client->deregister($transaction);
+
+			return $result;
+		}
     }
     
     require_once ALLSECUREEXCHANGE_PLUGIN_PATH.'allsecure-exchange-additional-payment-method-abstract.php';
@@ -2390,7 +2481,7 @@ function add_allsecureexchange_gateway_class($methods) {
 }
 
 /**
- * Add custom order action for recurring payments
+ * Add custom admin order action for recurring payments
  */
 add_action( 'woocommerce_order_actions', 'add_custom_order_action_for_recurring', 10 ,1 );
 function add_custom_order_action_for_recurring( $actions ) {
@@ -2399,21 +2490,20 @@ function add_custom_order_action_for_recurring( $actions ) {
 	if ( $theorder->get_meta( 'AS_RecurringActive' ) !== 'yes' ) {
 		return $actions;
 	}
-	$actions['allsecure_cancel_recurring'] = __( 'AllSecure Cancel Recurring', 'allsecureexchange' );
+	$actions['allsecure_cancel_recurring_admin'] = __( 'AllSecure Cancel Recurring', 'allsecureexchange' );
 	return $actions;
 }
 
 /**
  * Admin action for canceling recurring donation
  */
-add_action( 'woocommerce_order_action_allsecure_cancel_recurring', 'run_admin_action_allsecure_cancel_recurring' );
-function run_admin_action_allsecure_cancel_recurring( $order ){
-	$status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
+add_action( 'woocommerce_order_action_allsecure_cancel_recurring_admin', 'run_action_allsecure_cancel_recurring' );
+function run_action_allsecure_cancel_recurring( $order ){
+	$gateway = new WC_AllsecureExchange();
+	$status = $gateway->cancel_recurring( $order->get_id() );
 
-	if ( $status ) {
-		$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange') ));
-	} else {
-		$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
+	if ( $status['result'] !== 'success' ) {
+        wp_admin_notice( __('Failed canceling recurring order', 'allsecureexchange') );
 	}
 }
 
@@ -2441,19 +2531,16 @@ function allsecure_cancel_recurring(){
 		exit;
 	}
 
-	global $woocommerce;
 	$order_id = (int) $_REQUEST['order'];
 
-	$status = update_post_meta( $order_id, 'AS_RecurringActive', 'no' );
-	$order = wc_get_order($order_id);
+    $gateway = new WC_AllsecureExchange();
+	$status = $gateway->cancel_recurring( $order_id );
 
-	if ( $status ) {
-		$order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange') ));
-	} else {
-		$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
+	if ( $status['result'] !== 'success' ) {
+		wc_add_notice( __( 'Failed canceling recurring order.', 'allsecureexchange' ), 'error' );
 	}
 
-	wp_redirect( wc_get_account_endpoint_url( 'orders' ) );
+    wp_redirect( $status['redirect'] );
 	exit;
 }
 
@@ -2526,4 +2613,163 @@ function cart_has_recurring_donation() : bool {
 	}
 
     return false;
+}
+
+/**
+ * Register a new My Account endpoint: /my-account/monthly-donations/
+ */
+add_action('init', function () {
+	add_rewrite_endpoint('monthly-donations', EP_ROOT | EP_PAGES);
+});
+
+/**
+ * Add 'Monthly Donations' to the My Account menu (sidebar)
+ */
+add_filter('woocommerce_account_menu_items', function ($items) {
+	// Insert after Orders.
+	$new = [];
+
+	foreach ($items as $key => $label) {
+		$new[$key] = $label;
+
+		if ($key === 'orders') {
+			$new['monthly-donations'] = __('Monthly Donations', 'allsecureexchange');
+		}
+	}
+
+	return $new;
+}, 20);
+
+/**
+ * Output the page content (this appears in the content column next to the sidebar)
+ */
+add_action('woocommerce_account_monthly-donations_endpoint', function () {
+	$customer_orders = get_posts(
+        apply_filters(
+            'woocommerce_my_account_my_orders_query',
+            array(
+                'numberposts' => -1,
+                'post_type'   => wc_get_order_types( 'view-orders' ),
+                'post_status' => array_keys( wc_get_order_statuses() ),
+				'meta_query'  => array(
+					'relation' => 'AND',
+					array(
+						'key'   => '_customer_user',
+						'value' => get_current_user_id(),
+					),
+					array(
+						'key'     => 'AS_RecurringActive',
+						'compare' => 'EXISTS', // key is set to any value (including empty string)
+					),
+				),
+            )
+        )
+    );
+
+	if ( $customer_orders ) : ?>
+        <div class="monthly-donations-page">
+            <table class="woocommerce-orders-table woocommerce-MyAccount-orders shop_table shop_table_responsive my_account_orders account-orders-table">
+                <thead>
+                    <tr>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Order', 'woocommerce'); ?></span></th>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Status', 'woocommerce'); ?></span></th>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Total', 'woocommerce'); ?></span></th>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Date', 'woocommerce'); ?></span></th>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Card', 'allsecureexchange'); ?></span></th>
+                        <th scope="col" class="woocommerce-orders-table__header"><span class="nobr"><?php echo __('Actions', 'woocommerce'); ?></span></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <?php
+                    foreach ( $customer_orders as $customer_order ) {
+                        $order      = wc_get_order( $customer_order ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+                        ?>
+                        <tr class="woocommerce-orders-table__row order">
+                            <th class="woocommerce-orders-table__cell woocommerce-orders-table__cell-order-number" data-title="<?php echo esc_attr__( 'Order', 'allsecureexchange' ); ?>" scope="row">
+                                <?php /* translators: %s: the order number, usually accompanied by a leading # */ ?>
+                                <a href="<?php echo esc_url( $order->get_view_order_url() ); ?>" aria-label="<?php echo esc_attr( sprintf( __( 'View order number %s', 'woocommerce' ), $order->get_order_number() ) ); ?>">
+                                    <?php echo esc_html( _x( '#', 'hash before order number', 'woocommerce' ) . $order->get_order_number() ); ?>
+                                </a>
+                            </th>
+
+                            <?php
+                            $recurring_active = $order->get_meta( 'AS_RecurringActive' );
+                            if ( $recurring_active === 'no' ) {
+                                $recurring_active_label = __('Inactive', 'allsecureexchange');
+							} else if ( $recurring_active === 'yes' ) {
+								$recurring_active_label = __('Active', 'allsecureexchange');
+							} else {
+								$recurring_active_label = __('Error', 'allsecureexchange');
+							}
+                            ?>
+                            <td class="woocommerce-orders-table__cell woocommerce-orders-table__cell-active" data-title="<?php echo esc_attr__( 'Active', 'allsecureexchange' ); ?>"><?php echo esc_html( $recurring_active_label ); ?></td>
+
+                            <td class="woocommerce-orders-table__cell woocommerce-orders-table__cell-total" data-title="<?php echo esc_attr__( 'Total', 'woocommerce' ); ?>"><?php echo $order->get_formatted_order_total(); ?></td>
+
+                            <td class="woocommerce-orders-table__cell woocommerce-orders-table__cell-date" data-title="<?php echo esc_attr__( 'Date', 'woocommerce' ); ?>">
+                                <time datetime="<?php echo esc_attr( $order->get_date_created()->date( 'c' ) ); ?>"><?php echo esc_html( wc_format_datetime( $order->get_date_created() ) ); ?></time>
+                            </td>
+
+                            <?php
+                            // Card details
+                            $card_type = $order->get_meta( 'AS_CardType' );
+                            $card_bin_digits = $order->get_meta( 'AS_CardBinDigits' );
+                            $card_last_four_digits = $order->get_meta( 'AS_CardLastFourDigits' );
+
+                            $card_value = __( 'Removed', 'allsecureexchange' );
+                            if ( $card_type && $card_bin_digits && $card_last_four_digits ) {
+                                $card_value = strtoupper( $card_type ).' *** '.$card_last_four_digits;
+							}
+                            ?>
+                            <td class="woocommerce-orders-table__cell woocommerce-orders-table__cell-card" data-title="<?php echo esc_attr__( 'Card', 'allsecureexchange' ); ?>"><?php echo esc_html( $card_value ); ?></td>
+
+                            <td class="woocommerce-orders-table__cell woocommerce-orders-table__cell-order-actions" data-title="<?php echo esc_attr__( 'Actions', 'woocommerce' ); ?>">
+                                <?php
+                                /* translators: %s: order number */
+                                echo '<a href="' . esc_url( $order->get_view_order_url() ) . '" class="woocommerce-button' . esc_attr( $wp_button_class ) . ' button view-order" aria-label="' . esc_attr( sprintf( __( 'View order number %s', 'woocommerce' ), $order->get_order_number() ) ) . '">' . esc_html__( 'View', 'woocommerce' ) . '</a>';
+
+                                if ( $recurring_active === 'yes' ) {
+									$cancel_order_url = wp_nonce_url(admin_url('admin-ajax.php?action=allsecure_cancel_recurring&order=' . $order->get_id()), 'allsecure_cancel_recurring');
+									$cancel_order_label = _x('Cancel monthly donation', 'Cancel recurring payment', 'allsecureexchange');
+
+									/* translators: %s: order number */
+									echo '<a href="' . esc_url($cancel_order_url) . '" class="woocommerce-button' . esc_attr($wp_button_class) . ' button allsecure_cancel_recurring" aria-label="' . esc_attr(sprintf(__('Cancel monthly donation number %s', 'allsecureexchange'), $order->get_order_number())) . '">' . esc_html($cancel_order_label) . '</a>';
+								}
+                                ?>
+                            </td>
+                        </tr>
+                        <?php
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+	<?php else : ?>
+
+		<?php wc_print_notice( esc_html__( 'No monthly donations have been made yet.', 'allsecureexchange' ) . ' <a class="woocommerce-Button wc-forward button' . esc_attr( $wp_button_class ) . '" href="' . esc_url( apply_filters( 'woocommerce_return_to_shop_redirect', wc_get_page_permalink( 'shop' ) ) ) . '">' . esc_html__( 'Browse products', 'allsecureexchange' ) . '</a>', 'notice' ); // phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment ?>
+
+	<?php endif;
+});
+
+/**
+ * Add custom scripts for recurring payments
+ *
+ * @return void
+ */
+add_action( 'wp_enqueue_scripts', 'allsecure_recurring_scripts' );
+function allsecure_recurring_scripts() {
+	if ( is_checkout() || is_account_page() || is_admin() ) {
+		wp_register_script('allsecure_recurring_scripts', ALLSECUREEXCHANGE_PLUGIN_URL.'/assets/js/allsecure-exchange-recurring.js', array('jquery'), ALLSECUREEXCHANGE_VERSION, false);
+
+		$translation_array = array(
+			'confirmation_message' => __( 'Are you sure you want to cancel your donation? Canceling a monthly donation will delete your card details for this donation.', 'allsecureexchange' ),
+		);
+		wp_localize_script(
+			'allsecure_recurring_scripts', // The handle of your enqueued JS script
+			'allsecureStrings',        // The name of the JS object that will hold the strings
+			$translation_array  // The array of strings
+		);
+		wp_enqueue_script('allsecure_recurring_scripts');
+	}
 }
