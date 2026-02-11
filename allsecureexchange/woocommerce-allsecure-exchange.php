@@ -714,9 +714,9 @@ function woocommerce_allsecureexchange_init() {
                     }
 
                     // Token not required for recurring payments
-					$is_automatic_recurring = $order->get_meta('AS_RecurringDuplicate') === 'yes';
+					$is_recurring_duplicate = $order->get_meta('AS_RecurringDuplicate') === 'yes';
 
-                    if (empty($transaction_token) && !$is_automatic_recurring) {
+                    if (empty($transaction_token) && !$is_recurring_duplicate) {
                         throw new \Exception(__('Invalid transaction token', $this->domain));
                     }
                     
@@ -798,40 +798,48 @@ function woocommerce_allsecureexchange_init() {
                     } elseif ($result->getReturnType() == AllsecureResult::RETURN_TYPE_FINISHED) {
                         //payment is finished, update your cart/payment transaction
                         if ($action == 'debit') {
+                            $this->log('Finished debit in "process_payment".');
+
                             if (!empty($installment_number)) {
                                 $order->add_meta_data($this->prefix.'installment_number', $installment_number, true);
                             }
                             $order->delete_meta_data($this->prefix.'status');
                             $order->add_meta_data($this->prefix.'status', 'debited', true);
-                            $order->save_meta_data();
+
                             $comment1 = __('Allsecure Exchange payment is successfully debited. ', $this->domain);
-                            $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
+                            $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId . '.';
                             $comment = $comment1.$comment2;
 
-							// Recurring payment data
-							if ( $this->is_recurring_donation( $order_id ) ){
-								// Save informative card details
-								$card_data = $result->getReturnData();
+                            $card_data = $result->getReturnData();
 
-								$order->add_meta_data('AS_CardType', $card_data->getType(), true);
-								$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
-								$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
+							// Recurring payment data
+							if ( $this->is_recurring_donation( $order_id ) && $card_data ){
+								// Save informative card details
+								$order->update_meta_data('AS_CardType', $card_data->getType());
+								$order->update_meta_data('AS_CardBinDigits', $card_data->getBinDigits());
+								$order->update_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits());
 
 								// Save recurring info
 								$reference_id = $result->getReferenceId();
 								$interval = $this->get_recurring_interval($order_id);
 
-								$order->add_meta_data('AS_ReferenceID', $reference_id, true);
-								$order->add_meta_data('AS_RecurringInterval', $interval, true);
-								$order->add_meta_data('AS_RecurringActive', 'yes', true);
-								$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
+								$order->update_meta_data('AS_ReferenceID', $reference_id);
+								$order->update_meta_data('AS_RecurringInterval', $interval);
+								$order->update_meta_data('AS_RecurringActive', 'yes');
+								$comment3 = sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id);
+
+								$comment .= ' '.$comment3;
 							}
+
+							$order->save_meta_data();
                             
                             $order_status = $this->getOrderStatusBySlug($this->success_order_status);
-                            
                             $order->update_status($order_status, $comment);
-                            $woocommerce->cart->empty_cart();
-                        
+
+							if ( ! $is_recurring_duplicate ) {
+								$woocommerce->cart->empty_cart();
+							}
+
                             return [
                                 'result' => 'success',
                                 'redirect' => add_query_arg( 'order_id', $order_id, $this->get_return_url( $order ))
@@ -839,21 +847,34 @@ function woocommerce_allsecureexchange_init() {
                         } else {
                             $order->delete_meta_data($this->prefix.'status');
                             $order->add_meta_data($this->prefix.'status', 'preauthorized', true);
-                            $order->save_meta_data();
+
                             $order->payment_complete();
                             $comment1 = __('Allsecure payment is successfully reserved for manual capture. ', $this->domain);
                             $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                             $comment = $comment1.$comment2;
 
+							$card_data = $result->getReturnData();
+
 							// Recurring payment data
-							if ( $this->is_recurring_donation( $order_id ) ){
+							if ( $this->is_recurring_donation( $order_id ) && $card_data ){
+								// Save informative card details
+								$order->update_meta_data('AS_CardType', $card_data->getType());
+								$order->update_meta_data('AS_CardBinDigits', $card_data->getBinDigits());
+								$order->update_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits());
+
+								// Save recurring info
 								$reference_id = $result->getReferenceId();
 								$interval = $this->get_recurring_interval($order_id);
-								$order->add_meta_data('AS_ReferenceID', $reference_id, true);
-								$order->add_meta_data('AS_RecurringInterval', $interval, true);
-								$order->add_meta_data('AS_RecurringActive', 'yes', true);
-								$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
+
+								$order->update_meta_data('AS_ReferenceID', $reference_id);
+								$order->update_meta_data('AS_RecurringInterval', $interval);
+								$order->update_meta_data('AS_RecurringActive', 'yes');
+								$comment3 = sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id);
+
+								$comment .= ' '.$comment3;
 							}
+
+							$order->save_meta_data();
 
                             $order_status = 'wc-authorised';
                             $order->update_status($order_status, $comment);
@@ -1108,6 +1129,8 @@ function woocommerce_allsecureexchange_init() {
                             //result success
                             $gatewayReferenceId = $callbackResult->getUuid();
                             if ($callbackResult->getTransactionType() == AllsecureCallbackResult::TYPE_DEBIT) {
+								$this->log('Result OK for debit in "payment_webhook_handler".');
+
                                 //result debit
                                 if ( isset($callbackResult->getExtraData()['authCode']) ) {
                                     $order->add_meta_data($this->prefix.'AuthCode', $callbackResult->getExtraData()['authCode'], true);
@@ -1118,33 +1141,48 @@ function woocommerce_allsecureexchange_init() {
                                 $order->add_meta_data($this->prefix.'debit_uuid', $gatewayReferenceId);
                                 $order->delete_meta_data($this->prefix.'status');
                                 $order->add_meta_data($this->prefix.'status', 'debited', true);
-                                $order->save_meta_data();
-                                
+
                                 $comment1 = __('Allsecure Exchange payment is successfully debited. ', $this->domain);
-                                $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
+                                $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId . '.';
                                 $comment = $comment1.$comment2;
 
-								// Recurring payment data
-								if ( $this->is_recurring_donation( $order_id ) ){
-                                    // Save informative card details
-                                    $card_data = $callbackResult->getReturnData();
+                                $card_data = $callbackResult->getReturnData();
 
-									$order->add_meta_data('AS_CardType', $card_data->getType(), true);
-									$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
-									$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
+								// Recurring payment data, skip for not-3DS cards
+								if ( $this->is_recurring_donation( $order_id ) && $card_data && $card_data->getThreeDSecure() !== 'OFF' ){
+                                    // Save informative card details
+									$order->update_meta_data('AS_CardType', $card_data->getType());
+									$order->update_meta_data('AS_CardBinDigits', $card_data->getBinDigits());
+									$order->update_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits());
 
 									// Save recurring info
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
 
-									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
-									$order->add_meta_data('AS_RecurringInterval', $interval, true);
-									$order->add_meta_data('AS_RecurringActive', 'yes', true);
-									$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
+									$order->update_meta_data('AS_ReferenceID', $reference_id);
+									$order->update_meta_data('AS_RecurringInterval', $interval);
+									$order->update_meta_data('AS_RecurringActive', 'yes');
+									$comment3 = sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id);
+
+                                    $comment .= ' '.$comment3;
 								}
 
+								$order->save_meta_data();
+
+                                // Skip updating the status for recurring orders and not-3DS cards
                                 $order_status = $this->getOrderStatusBySlug($this->success_order_status);
-                                $order->update_status($order_status, $comment);
+								$is_recurring_duplicate = $order->get_meta('AS_RecurringDuplicate') === 'yes';
+
+								if ( $is_recurring_duplicate ) {
+									$this->log('Recurring status change skip');
+								}
+
+								if ( ! $is_recurring_duplicate && $card_data && $card_data->getThreeDSecure() !== 'OFF' ) {
+									$order->update_status($order_status, $comment);
+								} else {
+									$order->save();
+								}
+
                             } else if ($callbackResult->getTransactionType() == AllsecureCallbackResult::TYPE_CAPTURE) {
                                 //result capture
                                 $order->add_meta_data($this->prefix.'capture_uuid', $gatewayReferenceId);
@@ -1156,27 +1194,43 @@ function woocommerce_allsecureexchange_init() {
                                 $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                                 $comment = $comment1.$comment2;
 
-								// Recurring payment data
-								if ( $this->is_recurring_donation( $order_id ) ){
+								$card_data = $callbackResult->getReturnData();
+
+								// Recurring payment data, skip for not-3DS cards
+								if ( $this->is_recurring_donation( $order_id ) && $card_data && $card_data->getThreeDSecure() !== 'OFF' ){
 									// Save informative card details
-									$card_data = $callbackResult->getReturnData();
+									$order->update_meta_data('AS_CardType', $card_data->getType());
+									$order->update_meta_data('AS_CardBinDigits', $card_data->getBinDigits());
+									$order->update_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits());
 
-									$order->add_meta_data('AS_CardType', $card_data->getType(), true);
-									$order->add_meta_data('AS_CardBinDigits', $card_data->getBinDigits(), true);
-									$order->add_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits(), true);
-
-                                    // Save recurring info
+									// Save recurring info
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
 
-									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
-									$order->add_meta_data('AS_RecurringInterval', $interval, true);
-									$order->add_meta_data('AS_RecurringActive', 'yes', true);
-									$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
+									$order->update_meta_data('AS_ReferenceID', $reference_id);
+									$order->update_meta_data('AS_RecurringInterval', $interval);
+									$order->update_meta_data('AS_RecurringActive', 'yes');
+									$comment3 = sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id);
+
+									$comment .= ' '.$comment3;
 								}
-                                
-                                $order_status = $this->getOrderStatusBySlug($this->success_order_status);
-                                $order->update_status($order_status, $comment);
+
+								$order->save_meta_data();
+
+								// Skip updating the status for recurring orders and not-3DS cards
+								$order_status = $this->getOrderStatusBySlug($this->success_order_status);
+								$is_recurring_duplicate = $order->get_meta('AS_RecurringDuplicate') === 'yes';
+
+								if ( $is_recurring_duplicate ) {
+									$this->log('Recurring status change skip');
+								}
+
+								if ( ! $is_recurring_duplicate && $card_data && $card_data->getThreeDSecure() !== 'OFF' ) {
+									$order->update_status($order_status, $comment);
+								} else {
+									$order->save();
+								}
+
                             } else if ($callbackResult->getTransactionType() == AllsecureCallbackResult::TYPE_VOID) {
                                 //result void
                                 $order->add_meta_data($this->prefix.'void_uuid', $gatewayReferenceId);
@@ -1201,22 +1255,35 @@ function woocommerce_allsecureexchange_init() {
                                 $order->add_meta_data($this->prefix.'preauthorize_uuid', $gatewayReferenceId);
                                 $order->delete_meta_data($this->prefix.'status');
                                 $order->add_meta_data($this->prefix.'status', 'preauthorized', true);
-                                $order->save_meta_data();
+
                                 $order->payment_complete();
 
                                 $comment1 = __('Allsecure payment is successfully reserved for manual capture. ', $this->domain);
                                 $comment2 = __('Transaction ID', $this->domain).': ' .$gatewayReferenceId;
                                 $comment = $comment1.$comment2;
 
-								// Recurring payment data
-								if ( $this->is_recurring_donation( $order_id ) ){
+								$card_data = $callbackResult->getReturnData();
+
+								// Recurring payment data, skip for not-3DS cards
+								if ( $this->is_recurring_donation( $order_id ) && $card_data && $card_data->getThreeDSecure() !== 'OFF' ){
+									// Save informative card details
+									$order->update_meta_data('AS_CardType', $card_data->getType());
+									$order->update_meta_data('AS_CardBinDigits', $card_data->getBinDigits());
+									$order->update_meta_data('AS_CardLastFourDigits', $card_data->getLastFourDigits());
+
+									// Save recurring info
 									$reference_id = $callbackResult->getReferenceId();
 									$interval = $this->get_recurring_interval($order_id);
-									$order->add_meta_data('AS_ReferenceID', $reference_id, true);
-									$order->add_meta_data('AS_RecurringInterval', $interval, true);
-									$order->add_meta_data('AS_RecurringActive', 'yes', true);
-									$order->add_order_note(sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id));
+
+									$order->update_meta_data('AS_ReferenceID', $reference_id);
+									$order->update_meta_data('AS_RecurringInterval', $interval);
+									$order->update_meta_data('AS_RecurringActive', 'yes');
+									$comment3 = sprintf(__('AllSecure Recurring Payment Successful. Reference ID: %s.', 'allsecureexchange'), $reference_id);
+
+									$comment .= ' '.$comment3;
 								}
+
+								$order->save_meta_data();
 
                                 $order_status = 'wc-authorised';
                                 $order->update_status($order_status, $comment);
@@ -1511,7 +1578,7 @@ function woocommerce_allsecureexchange_init() {
                     $order_id = $order->get_id();
 
                     if ($order_id) {
-                        $order = new WC_Order($order_id);
+                        $order = $this->getOrder($order_id);
                         $uuid = $order->get_meta($this->prefix.'payment_request_uuid');
 
                         $client = $this->getClient();
@@ -1522,7 +1589,7 @@ function woocommerce_allsecureexchange_init() {
 
                         $params = array();
                         if ($statusResult->hasErrors()) {
-
+							$this->log('Error with the status result');
                         } else {
                             $result = $statusResult->getTransactionStatus();
                             $transactionType = $statusResult->getTransactionType();
@@ -1587,7 +1654,8 @@ function woocommerce_allsecureexchange_init() {
                         }
                     }
                 } catch (\Exception $e) {
-
+					$this->log('email_after_order_table throwable: ' . get_class($e) . ' :: ' . $e->getMessage());
+					$this->log($e->getTraceAsString());
                 }
             }
         }
@@ -1842,7 +1910,7 @@ function woocommerce_allsecureexchange_init() {
                         
                         $order_status = $this->getOrderStatusBySlug($this->success_order_status);
                         $order->update_status($order_status, $comment);
-                        
+
                         $status = 'success';
                         $message = $comment;
                     } elseif ($result->getReturnType() == AllsecureResult::RETURN_TYPE_ERROR) {
@@ -2245,8 +2313,8 @@ function woocommerce_allsecureexchange_init() {
                ->setErrorUrl($error_url);
 
 		   // Server-to-server recurring transaction
-		   $is_automatic_recurring = $order->get_meta('AS_RecurringDuplicate') === 'yes';
-		   if( $is_automatic_recurring ){
+		   $is_recurring_duplicate = $order->get_meta('AS_RecurringDuplicate') === 'yes';
+		   if( $is_recurring_duplicate ){
 			   $transaction->setReferenceUuid($order->get_meta('AS_ReferenceID'));
 			   $transaction->setTransactionIndicator('RECURRING');
 			   $order->add_order_note('Recurring Reference ID: '.$order->get_meta('AS_ReferenceID').'.');
@@ -2254,14 +2322,14 @@ function woocommerce_allsecureexchange_init() {
 		   }
 
 		   // Register for initial recurring payments
-		   if ( !$is_automatic_recurring && $this->is_recurring_donation( $order_id ) ) {
+		   if ( !$is_recurring_duplicate && $this->is_recurring_donation( $order_id ) ) {
 			   $transaction->setWithRegister( true );
                $transaction->setTransactionIndicator('INITIAL');
 			   $this->log('Transaction With Registration');
 		   }
 
            // Skip for automatic recurring transactions
-           if (isset($token) && !$is_automatic_recurring) {
+           if (isset($token) && !$is_recurring_duplicate) {
                $transaction->setTransactionToken($token);
            }
 
@@ -2385,7 +2453,7 @@ function woocommerce_allsecureexchange_init() {
             $deregistration_status = $this->process_deregister( $order_id );
             $status = update_post_meta( $order->get_id(), 'AS_RecurringActive', 'no' );
 
-			if ( $deregistration_status['result'] === 'success' && $status) {
+			if ( $deregistration_status['result'] === 'success' && $status ) {
                 $order->add_order_note(sprintf(__('AllSecure Canceling Recurring Payments Successful.', 'allsecureexchange')));
 			} else {
 				$order->add_order_note(sprintf(__('AllSecure Failed Canceling Recurring Payments.', 'allsecureexchange') ));
@@ -2455,8 +2523,6 @@ function woocommerce_allsecureexchange_init() {
 
             $transaction->setMerchantTransactionId($merchantTransactionId)
                 ->setReferenceUuid($reference_id);
-
-            // $order->add_order_note('Recurring Reference ID: '.$order->get_meta('AS_ReferenceID').'.');
 
             $this->log('Deregistering Transaction. Reference ID: '.$reference_id);
             $this->log((array)($transaction));
