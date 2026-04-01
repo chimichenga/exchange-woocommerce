@@ -912,8 +912,10 @@ function woocommerce_allsecureexchange_init() {
 				$this->log('Payment Create Catch: '.$errorMessage);
 				$message = __('Payment is failed. ', $this->domain).' '.$errorMessage;
 
-				WC()->session->set('refresh_totals', true);
-				wc_add_notice($message, $notice_type = 'error');
+                if ( WC()->session ) {
+                	WC()->session->set('refresh_totals', true);
+				    wc_add_notice($message, $notice_type = 'error');
+                }
 				return array(
 					'result' => 'failure',
 					'redirect' => wc_get_checkout_url()
